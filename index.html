@@ -1,48 +1,248 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Socket.IO chat</title>
+    <title>Socket.IO Chat - Modificado</title>
     <style>
-      body { margin: 0; padding-bottom: 3rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding-bottom: 7rem;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: #f0f2f5;
+      }
 
-      #form { background: rgba(0, 0, 0, 0.15); padding: 0.25rem; position: fixed; bottom: 0; left: 0; right: 0; display: flex; height: 3rem; box-sizing: border-box; backdrop-filter: blur(10px); }
-      #input { border: none; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin: 0.25rem; }
-      #input:focus { outline: none; }
-      #form > button { background: #333; border: none; padding: 0 1rem; margin: 0.25rem; border-radius: 3px; outline: none; color: #fff; }
+      #header {
+        background: #4a6fa5;
+        color: white;
+        padding: 0.75rem 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      #header h2 { margin: 0; font-size: 1.1rem; }
+      #usuariosOnline {
+        font-size: 0.85rem;
+        background: rgba(255,255,255,0.2);
+        padding: 0.25rem 0.6rem;
+        border-radius: 1rem;
+      }
 
-      #messages { list-style-type: none; margin: 0; padding: 0; }
-      #messages > li { padding: 0.5rem 1rem; }
-      #messages > li:nth-child(odd) { background: #efefef; }
+      #form {
+        background: rgba(0, 0, 0, 0.05);
+        padding: 0.5rem;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        gap: 0.4rem;
+        height: auto;
+        backdrop-filter: blur(10px);
+        border-top: 1px solid #ddd;
+      }
+      #input {
+        border: 1px solid #ccc;
+        padding: 0.5rem 1rem;
+        flex-grow: 1;
+        border-radius: 2rem;
+        margin: 0.25rem 0;
+        font-size: 1rem;
+      }
+      #input:focus { outline: none; border-color: #4a6fa5; }
+      #input:disabled { background: #eee; cursor: not-allowed; }
+
+      #form button {
+        border: none;
+        padding: 0 1rem;
+        margin: 0.25rem 0;
+        border-radius: 3px;
+        outline: none;
+        color: #fff;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+      #form button:disabled { opacity: 0.5; cursor: not-allowed; }
+      #botonEnviar { background: #4a6fa5; }
+      #botonEnviar:hover:not(:disabled) { background: #3a5985; }
+      #botonDesconectar { background: #c0392b; }
+      #botonDesconectar:hover:not(:disabled) { background: #a93225; }
+
+      #messages {
+        list-style-type: none;
+        margin: 0;
+        padding: 0.5rem;
+      }
+      #messages > li {
+        padding: 0.6rem 0.9rem;
+        margin: 0.4rem 0;
+        border-radius: 0.6rem;
+        max-width: 75%;
+        word-wrap: break-word;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+      }
+      #messages > li.propio {
+        background: #d1e7dd;
+        margin-left: auto;
+        text-align: right;
+      }
+      #messages > li.sistema {
+        background: transparent;
+        text-align: center;
+        color: #777;
+        font-style: italic;
+        font-size: 0.85rem;
+        max-width: 100%;
+        box-shadow: none;
+      }
+      .nombre { font-weight: bold; color: #4a6fa5; font-size: 0.85rem; }
+      .hora { color: #888; font-size: 0.75rem; margin-left: 0.4rem; }
+      #escribiendoIndicador {
+        position: fixed;
+        bottom: 3.2rem;
+        left: 1rem;
+        font-style: italic;
+        color: #666;
+        font-size: 0.85rem;
+      }
+      #estadoConexion {
+        text-align: center;
+        padding: 0.5rem;
+        font-weight: 500;
+      }
+      .desconectado { background: #f8d7da; color: #721c24; }
     </style>
   </head>
   <body>
+    <div id="header">
+      <h2>💬 Socket.IO Chat</h2>
+      <span id="usuariosOnline">👥 0 conectados</span>
+    </div>
+
     <ul id="messages"></ul>
+
+    <div id="escribiendoIndicador"></div>
+
     <form id="form" action="">
-      <input id="input" autocomplete="off" /><button>Send</button>
+      <input id="input" autocomplete="off" placeholder="Escribe un mensaje..." />
+      <button type="submit" id="botonEnviar">Enviar</button>
+      <button type="button" id="botonDesconectar">Desconectar</button>
     </form>
+
     <script src="/socket.io/socket.io.js"></script>
 
     <script>
-      var socket = io();
+      // Pedimos un nombre al usuario antes de conectarnos
+      let username = prompt('¿Cuál es tu nombre?');
+      while (!username || username.trim() === '') {
+        username = prompt('Por favor introduce un nombre válido:');
+      }
+      username = username.trim();
 
-      var messages = document.getElementById('messages');
-      var form = document.getElementById('form');
-      var input = document.getElementById('input');
+      const socket = io();
 
-      form.addEventListener('submit', function(e) {
+      const messages = document.getElementById('messages');
+      const form = document.getElementById('form');
+      const input = document.getElementById('input');
+      const botonEnviar = document.getElementById('botonEnviar');
+      const botonDesconectar = document.getElementById('botonDesconectar');
+      const usuariosOnline = document.getElementById('usuariosOnline');
+      const escribiendoIndicador = document.getElementById('escribiendoIndicador');
+
+      // Avisar al servidor del nuevo usuario al conectarse
+      socket.on('connect', () => {
+        socket.emit('nuevo usuario', username);
+      });
+
+      // ===== Pregunta 4: Botón para cerrar la conexión =====
+      botonDesconectar.addEventListener('click', () => {
+        if (socket.connected) {
+          socket.disconnect();
+          input.disabled = true;
+          botonEnviar.disabled = true;
+          botonDesconectar.disabled = true;
+          input.placeholder = 'Conexión cerrada';
+          const aviso = document.createElement('li');
+          aviso.classList.add('sistema');
+          aviso.textContent = '🔌 Te has desconectado del chat';
+          messages.appendChild(aviso);
+        }
+      });
+
+      // ===== Envío de mensajes =====
+      form.addEventListener('submit', (e) => {
         e.preventDefault();
-        if (input.value) {
+        if (input.value && socket.connected) {
           socket.emit('chat message', input.value);
+          socket.emit('dejo de escribir');
           input.value = '';
         }
       });
 
-      socket.on('chat message', function(msg) {
-        var item = document.createElement('li');
-        item.textContent = msg;
+      // ===== Indicador de "está escribiendo" =====
+      let timeoutEscribir;
+      input.addEventListener('input', () => {
+        socket.emit('escribiendo');
+        clearTimeout(timeoutEscribir);
+        timeoutEscribir = setTimeout(() => {
+          socket.emit('dejo de escribir');
+        }, 1000);
+      });
+
+      socket.on('escribiendo', (nombre) => {
+        escribiendoIndicador.textContent = `${nombre} está escribiendo...`;
+      });
+      socket.on('dejo de escribir', () => {
+        escribiendoIndicador.textContent = '';
+      });
+
+      // ===== Recepción de mensajes =====
+      socket.on('chat message', (data) => {
+        const item = document.createElement('li');
+        if (data.socketId === socket.id) {
+          item.classList.add('propio');
+          item.innerHTML =
+            '<span class="hora">' + data.hora + '</span><br>' +
+            escapeHtml(data.texto);
+        } else {
+          item.innerHTML =
+            '<span class="nombre">' + escapeHtml(data.username) + '</span>' +
+            '<span class="hora">' + data.hora + '</span><br>' +
+            escapeHtml(data.texto);
+        }
         messages.appendChild(item);
         window.scrollTo(0, document.body.scrollHeight);
       });
+
+      // ===== Notificaciones del sistema =====
+      socket.on('usuario unido', (data) => {
+        const item = document.createElement('li');
+        item.classList.add('sistema');
+        item.textContent = '🟢 ' + data.username + ' se ha unido al chat';
+        messages.appendChild(item);
+        usuariosOnline.textContent = '👥 ' + data.total + ' conectados';
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+
+      socket.on('usuario salio', (data) => {
+        const item = document.createElement('li');
+        item.classList.add('sistema');
+        item.textContent = '🔴 ' + data.username + ' ha salido del chat';
+        messages.appendChild(item);
+        usuariosOnline.textContent = '👥 ' + data.total + ' conectados';
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+
+      // Función auxiliar para evitar inyección de HTML en los mensajes
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
     </script>
   </body>
 </html>
